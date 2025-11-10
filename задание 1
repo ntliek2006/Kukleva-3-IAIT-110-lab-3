@@ -1,0 +1,42 @@
+const int ledPin = 13;
+const int buttonPin = 2;
+
+volatile bool fastMode = false;
+volatile unsigned long lastDebounceTime = 0;
+volatile bool modeChanged = false; // Флаг изменения режима
+const unsigned long debounceDelay = 50;
+
+void handleButton() {
+  if (millis() - lastDebounceTime > debounceDelay) {
+    fastMode = !fastMode;
+    modeChanged = true; // Устанавливаем флаг
+    lastDebounceTime = millis();
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(ledPin, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(buttonPin), handleButton, FALLING);
+  
+  Serial.println("Система запущена. Исходная частота: 1 Гц");
+}
+
+void loop() {
+  static unsigned long lastBlinkTime = 0;
+  unsigned long interval = fastMode ? 200 : 1000; // 5 Гц или 1 Гц
+
+  // Обработка изменения режима (ВНЕ ISR!)
+  if (modeChanged) {
+    Serial.print("Режим изменен: ");
+    Serial.println(fastMode ? "5 Гц" : "1 Гц");
+    modeChanged = false;
+  }
+
+  // Управление миганием светодиода
+  if (millis() - lastBlinkTime >= interval) {
+    digitalWrite(ledPin, !digitalRead(ledPin));
+    lastBlinkTime = millis();
+  }
+}
