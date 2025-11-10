@@ -1,0 +1,71 @@
+const int ledPin = 13;
+
+volatile unsigned long isrCounter = 0;
+volatile bool ledStateChanged = false;
+volatile bool currentLedState = false;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(ledPin, OUTPUT);
+  
+  // Детальный расчет частоты
+  unsigned long f_cpu = 16000000;    // 16 МГц
+  unsigned long prescaler = 64;      // Делитель
+  unsigned long target_freq = 100;   // 100 Гц
+  unsigned long ocr_value = (f_cpu / (prescaler * target_freq)) - 1;
+  
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCCR1B |= (1 << WGM12);           // CTC mode
+  OCR1A = ocr_value;                // 2499 для 100 Гц
+  TIMSK1 |= (1 << OCIE1A);          // Включить прерывание
+  TCCR1B |= (1 << CS11) | (1 << CS10); // Предделитель 64
+  
+  sei();
+  
+  // Вывод детальной информации о настройках
+  Serial.println("=== ТАЙМЕР TIMER1 ===");
+  Serial.print("Тактовая частота: "); Serial.print(f_cpu); Serial.println(" Гц");
+  Serial.print("Целевая частота: "); Serial.print(target_freq); Serial.println(" Гц");
+  Serial.print("Предделитель: "); Serial.println(prescaler);
+  Serial.print("OCR1A: "); Serial.println(ocr_value);
+  
+  // Проверка расчета
+  unsigned long actual_freq = f_cpu / (prescaler * (ocr_value + 1));
+  Serial.print("Фактическая частота: "); Serial.print(actual_freq); Serial.println(" Гц");
+  Serial.print("Период: "); Serial.print(1000.0 / actual_freq, 3); Serial.println(" мс");
+  Serial.println("Частота мигания светодиода: 2 Гц (0.5 с период)");
+  Serial.println("=====================================");
+}
+
+ISR(TIMER1_COMPA_vect) {
+  static int counter = 0;
+  counter++;
+  isrCounter++;
+  
+  if (counter >= 50) { // 100 Гц / 50 = 2 Гц мигания
+    currentLedState = !currentLedState;
+    digitalWrite(ledPin, currentLedState);
+    ledStateChanged = true;
+    counter = 0;
+  }
+}
+
+void loop() {
+  static unsigned long lastStateTime = 0;
+  
+  if (ledStateChanged) {
+    unsigned long currentTime = millis();
+    unsigned long period = currentTime - lastStateTime;
+    
+    Serial.print("T=");
+    Serial.print(currentTime);
+    Serial.print("мс (Δt=");
+    Serial.print(period);
+    Serial.print("мс) | LED:");
+    Serial.println(currentLedState ? "ON" : "OFF");
+    
+    ledStateChanged = false;
+    lastStateTime = currentTime;
+  }
+}
